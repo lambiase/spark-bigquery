@@ -26,33 +26,30 @@ import org.apache.spark.sql.types.StructType
 /**
   * The default BigQuery source for Spark SQL.
   */
-class DefaultSource
-  extends StreamSinkProvider
-    with StreamSourceProvider {
-  override def createSink(sqlContext: SQLContext, parameters: Map[String, String],
-                          partitionColumns: Seq[String], outputMode: OutputMode): Sink = {
+class DefaultSource extends RelationProvider /*with SchemaRelationProvider*/ {
 
-    val path = parameters.get("transaction_log").getOrElse("transaction_log")
-    new BigQuerySink(sqlContext.sparkSession, path, parameters)
-
-  }
-
-  def getConvertedSchema(sqlContext: SQLContext,options: Map[String, String]): StructType = {
+  private def getConvertedSchema(sqlContext: SQLContext,options: Map[String, String]): StructType = {
     val bigqueryClient = BigQueryClient.getInstance(sqlContext)
     val tableReference = BigQueryStrings.parseTableReference(options.get("tableReferenceSource").get)
     SchemaConverters.BQToSQLSchema(bigqueryClient.getTableSchema(tableReference))
   }
 
-  override def sourceSchema(sqlContext: SQLContext,
-                            schema: Option[StructType],
-                            providerName: String,
-                            options: Map[String, String]): (String, StructType) = {
-    val convertedSchema = getConvertedSchema(sqlContext,options)
-    ("bigquery", schema.getOrElse(convertedSchema))
+  override def createRelation(sqlContext: SQLContext, parameters: Map[String, String]): BaseRelation = {
+    val otherSqlName = sqlContext
+    new BaseRelation {
+      override def schema: StructType = getConvertedSchema(sqlContext, parameters)
+      override def sqlContext: SQLContext = otherSqlName
+    }
   }
 
-  override def createSource(sqlContext: SQLContext, metadataPath: String,
-                            schema: Option[StructType], providerName: String, parameters: Map[String, String]): Source = {
-    new BigQuerySource(sqlContext, schema, parameters)
+  /*
+  override def createRelation(sqlContext: SQLContext, parameters: Map[String, String], schema: StructType): BaseRelation = {
+    val otherSqlName = sqlContext
+    val otherSchemaName = schema
+    new BaseRelation {
+    override def schema: StructType = otherSchemaName
+    override def sqlContext: SQLContext = otherSqlName
+    }
   }
+  */
 }
